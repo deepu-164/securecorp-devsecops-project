@@ -59,4 +59,37 @@ This project is built as a complete hands-on learning platform for:
 - Pentesting
 
 ---
-Project under active development.
+Project under active development
+
+## Current Features
+
+- User Registration
+- User Login
+- JWT Authentication
+- Password Hashing (bcrypt)
+- Protected Routes
+- PostgreSQL Integration
+- Environment Variable Configuration
+
+## Security Features
+
+- JWT Authentication
+- Password Hashing
+- Protected APIs
+- Secure Environment Variables.
+
+## Environment Variables
+
+Create a `.env` file in the project root.
+
+```env
+PORT=3000
+
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=postgres
+DB_PASSWORD=your_password
+DB_NAME=securecorp
+
+JWT_SECRET=your_secret_key
+```
