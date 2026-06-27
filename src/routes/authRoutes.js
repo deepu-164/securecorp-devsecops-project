@@ -4,8 +4,10 @@ const authenticate = require("../middleware/authMiddleware");
 const authorize = require("../middleware/roleMiddleware");
 const {
 	    register,
-	    login,
-	    profile
+    login,
+    refresh,
+	logout,
+    profile
 } = require("../controllers/authController");
 
 
@@ -13,6 +15,10 @@ const {
 router.post("/register", register);
 
 router.post("/login", login);
+
+router.post("/refresh", refresh);
+
+router.post("/logout", logout);
 
 router.get(
 	    "/admin",

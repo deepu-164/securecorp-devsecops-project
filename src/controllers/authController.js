@@ -1,3 +1,8 @@
+const {
+    saveRefreshToken,
+    findRefreshToken,
+    deleteRefreshToken
+} = require("../models/refreshTokenModel");
 const { createAuditLog } = require("../models/auditModel");
 const bcrypt = require("bcrypt");
 const {
@@ -110,21 +115,42 @@ const login = async (req, res) => {
 
         await createAuditLog(user.id, "LOGIN_SUCCESS");
 
-        const token = jwt.sign(
-            {
-                id: user.id,
-                email: user.email,
-                role: user.role
-            },
-            process.env.JWT_SECRET,
-            {
-                expiresIn: "10m"
-            }
-        );
+        const accessToken = jwt.sign(
+    {
+        id: user.id,
+        email: user.email,
+        role: user.role
+    },
+    process.env.JWT_SECRET,
+    {
+        expiresIn: "15m"
+    }
+);
+
+const refreshToken = jwt.sign(
+    {
+        id: user.id
+    },
+    process.env.JWT_SECRET,
+    {
+        expiresIn: "7d"
+    }
+);
+
+const expiresAt = new Date();
+
+expiresAt.setDate(expiresAt.getDate() + 7);
+
+await saveRefreshToken(
+    user.id,
+    refreshToken,
+    expiresAt
+);
 
         res.json({
             success: true,
-            token
+            accessToken,
+    refreshToken
         });
 
     } catch (err) {
@@ -137,6 +163,94 @@ const login = async (req, res) => {
         });
 
     }
+};
+
+const refresh = async (req, res) => {
+
+    try {
+
+        const { refreshToken } = req.body;
+
+        if (!refreshToken) {
+            return res.status(401).json({
+                success: false,
+                message: "Refresh token required"
+            });
+        }
+
+        const storedToken = await findRefreshToken(refreshToken);
+
+        if (!storedToken) {
+            return res.status(403).json({
+                success: false,
+                message: "Invalid Refresh Token"
+            });
+        }
+
+        const decoded = jwt.verify(
+            refreshToken,
+            process.env.JWT_SECRET
+        );
+
+        const accessToken = jwt.sign(
+            {
+                id: decoded.id
+            },
+            process.env.JWT_SECRET,
+            {
+                expiresIn: "15m"
+            }
+        );
+
+        res.json({
+            success: true,
+            accessToken
+        });
+
+    } catch (err) {
+
+        res.status(403).json({
+            success: false,
+            message: "Refresh Token Expired"
+        });
+
+    }
+
+};
+
+const logout = async (req, res) => {
+
+    try {
+
+        const { refreshToken } = req.body;
+
+        if (!refreshToken) {
+
+            return res.status(400).json({
+                success: false,
+                message: "Refresh Token Required"
+            });
+
+        }
+
+        await deleteRefreshToken(refreshToken);
+
+        res.json({
+            success: true,
+            message: "Logged out successfully"
+        });
+
+    } catch (err) {
+
+        console.error(err);
+
+        res.status(500).json({
+            success: false,
+            message: "Server Error"
+        });
+
+    }
+
 };
 
 const profile = async (req, res) => {
@@ -153,6 +267,8 @@ const profile = async (req, res) => {
 
 module.exports = {
 	    register,
-	    login,
-	    profile
+    login,
+    refresh,
+    logout,
+    profile
 };
