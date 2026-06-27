@@ -1,7 +1,11 @@
+const { createAuditLog } = require("../models/auditModel");
 const bcrypt = require("bcrypt");
 const {
-	    findUserByEmail,
-	    createUser,
+    findUserByEmail,
+    createUser,
+    incrementFailedAttempts,
+    resetFailedAttempts,
+    lockAccount
 } = require("../models/userModel");
 
 const register = async (req, res) => {
@@ -32,6 +36,7 @@ const register = async (req, res) => {
 				                email,
 				                hashedPassword
 				            );
+                    await createAuditLog(user.id, "USER_REGISTERED");
 
 		            res.status(201).json({
 				                success: true,
@@ -54,67 +59,84 @@ const register = async (req, res) => {
 const jwt = require("jsonwebtoken");
 
 const login = async (req, res) => {
+    try {
 
-	    try {
+        const { email, password } = req.body;
 
-		            const { email, password } = req.body;
+        const user = await findUserByEmail(email);
 
-		            if (!email || !password) {
-				                return res.status(400).json({
-							                success: false,
-							                message: "Email and password required"
-							            });
-				            }
+        if (!user) {
+            return res.status(401).json({
+                success: false,
+                message: "Invalid Email or Password"
+            });
+        }
 
-		            const user = await findUserByEmail(email);
+        // Check if account is locked
+        if (user.lock_until && new Date(user.lock_until) > new Date()) {
+            return res.status(403).json({
+                success: false,
+                message: "Account locked. Try again later."
+            });
+        }
 
-		            if (!user) {
-				                return res.status(401).json({
-							                success: false,
-							                message: "Invalid credentials"
-							            });
-				            }
+        const validPassword = await bcrypt.compare(password, user.password);
 
-		            const passwordMatch = await bcrypt.compare(
-				                password,
-				                user.password
-				            );
+        if (!validPassword) {
 
-		            if (!passwordMatch) {
-				                return res.status(401).json({
-							                success: false,
-							                message: "Invalid credentials"
-							            });
-				            }
+            await incrementFailedAttempts(user.id);
 
-		            const token = jwt.sign(
-				                {
-							                id: user.id,
-							                email: user.email,
-							                role: user.role
-							            },
-				                process.env.JWT_SECRET,
-				                {
-							                expiresIn: "1h"
-							            }
-				            );
+            await createAuditLog(user.id, "LOGIN_FAILED");
 
-		            res.status(200).json({
-				                success: true,
-				                token
-				            });
+            if (user.failed_attempts + 1 >= 5) {
 
-		        } catch (error) {
+                await lockAccount(user.id, 15);
 
-				        console.error(error);
+                await createAuditLog(user.id, "ACCOUNT_LOCKED");
 
-				        res.status(500).json({
-						            success: false,
-						            message: "Internal Server Error"
-						        });
+                return res.status(403).json({
+                    success: false,
+                    message: "Too many failed attempts. Account locked for 15 minutes."
+                });
+            }
 
-				    }
+            return res.status(401).json({
+                success: false,
+                message: "Invalid Email or Password"
+            });
+        }
 
+        await resetFailedAttempts(user.id);
+
+        await createAuditLog(user.id, "LOGIN_SUCCESS");
+
+        const token = jwt.sign(
+            {
+                id: user.id,
+                email: user.email,
+                role: user.role
+            },
+            process.env.JWT_SECRET,
+            {
+                expiresIn: "10m"
+            }
+        );
+
+        res.json({
+            success: true,
+            token
+        });
+
+    } catch (err) {
+
+        console.error(err);
+
+        res.status(500).json({
+            success: false,
+            message: "Server Error"
+        });
+
+    }
 };
 
 const profile = async (req, res) => {
