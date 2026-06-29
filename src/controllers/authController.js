@@ -1,19 +1,35 @@
+const crypto = require("crypto");
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
+
+const {
+    saveResetToken,
+    findResetToken,
+    deleteResetToken
+} = require("../models/passwordResetModel");
+
+const {
+    sendResetEmail
+} = require("../services/emailService");
+
 const {
     saveRefreshToken,
     findRefreshToken,
     deleteRefreshToken
 } = require("../models/refreshTokenModel");
+
 const { createAuditLog } = require("../models/auditModel");
-const bcrypt = require("bcrypt");
+
 const {
     findUserByEmail,
     createUser,
     incrementFailedAttempts,
     resetFailedAttempts,
-    lockAccount
+    lockAccount,
+    updatePassword
 } = require("../models/userModel");
 
-const register = async (req, res) => {
+const register = async (req, res, next) => {
 	    try {
 
 		            const { name, email, password } = req.body;
@@ -51,19 +67,13 @@ const register = async (req, res) => {
 
 		        } catch (error) {
 
-				        console.error(error);
-
-				        res.status(500).json({
-						            success: false,
-						            message: "Internal Server Error"
-						        });
+				        next(error);
 
 				    }
 };
 
-const jwt = require("jsonwebtoken");
 
-const login = async (req, res) => {
+const login = async (req, res, next) => {
     try {
 
         const { email, password } = req.body;
@@ -155,17 +165,12 @@ await saveRefreshToken(
 
     } catch (err) {
 
-        console.error(err);
-
-        res.status(500).json({
-            success: false,
-            message: "Server Error"
-        });
+         next(err);
 
     }
 };
 
-const refresh = async (req, res) => {
+const refresh = async (req, res, next) => {
 
     try {
 
@@ -209,16 +214,13 @@ const refresh = async (req, res) => {
 
     } catch (err) {
 
-        res.status(403).json({
-            success: false,
-            message: "Refresh Token Expired"
-        });
+         next(err);
 
     }
 
 };
 
-const logout = async (req, res) => {
+const logout = async (req, res, next) => {
 
     try {
 
@@ -242,18 +244,130 @@ const logout = async (req, res) => {
 
     } catch (err) {
 
-        console.error(err);
+         next(err);
+    }
 
-        res.status(500).json({
-            success: false,
-            message: "Server Error"
+};
+
+const forgotPassword = async (req, res, next) => {
+
+    try {
+
+        const { email } = req.body;
+
+        const user = await findUserByEmail(email);
+
+        if (!user) {
+
+            return res.status(404).json({
+                success: false,
+                message: "User not found"
+            });
+
+        }
+
+        const token =
+            crypto.randomBytes(32).toString("hex");
+
+        const expiresAt = new Date();
+
+        expiresAt.setHours(
+            expiresAt.getHours() + 1
+        );
+
+        await saveResetToken(
+            user.id,
+            token,
+            expiresAt
+        );
+
+        await sendResetEmail(
+            user.email,
+            token
+        );
+
+        res.json({
+
+            success: true,
+
+            message:
+                "Password reset email sent"
+
         });
+
+    } catch (err) {
+
+         next(err);
+
 
     }
 
 };
 
-const profile = async (req, res) => {
+const resetPassword = async (req, res, next) => {
+
+    try {
+
+        const { token, password } = req.body;
+
+        const resetToken =
+            await findResetToken(token);
+
+        if (!resetToken) {
+
+            return res.status(400).json({
+
+                success: false,
+
+                message: "Invalid token"
+
+            });
+
+        }
+
+        if (new Date(resetToken.expires_at) < new Date()) {
+
+            return res.status(400).json({
+
+                success: false,
+
+                message: "Token expired"
+
+            });
+
+        }
+
+        const hashedPassword =
+            await bcrypt.hash(password, 10);
+
+        await updatePassword(
+
+            resetToken.user_id,
+
+            hashedPassword
+
+        );
+
+        await deleteResetToken(token);
+
+        res.json({
+
+            success: true,
+
+            message:
+                "Password updated successfully"
+
+        });
+
+    } catch (err) {
+
+         next(err);
+    }
+
+};
+
+const profile = async (req, res, next) => {
+    try {
 
 	    res.status(200).json({
 
@@ -262,6 +376,12 @@ const profile = async (req, res) => {
 		            user: req.user
 
 		        });
+        } catch (err) {
+
+        next(err);
+
+    }
+
 
 };
 
@@ -270,5 +390,7 @@ module.exports = {
     login,
     refresh,
     logout,
+    forgotPassword,
+    resetPassword,
     profile
 };
