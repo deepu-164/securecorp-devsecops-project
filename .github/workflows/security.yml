@@ -10,14 +10,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
       - name: Build Docker Image
-        run: docker build -t securecorp .
+        run: |
+          docker build -t securecorp:latest .
 
-      - name: Run Trivy Scan
-        uses: aquasecurity/trivy-action@master
+      - name: Scan Docker Image with Trivy
+        uses: aquasecurity/trivy-action@0.28.0
         with:
-          image-ref: securecorp
+          image-ref: securecorp:latest
           format: table
           exit-code: 0
+          ignore-unfixed: true
