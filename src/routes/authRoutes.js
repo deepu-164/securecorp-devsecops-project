@@ -102,7 +102,7 @@ router.post("/login",authLimiter, login);
  *         description: New access token generated
  */
 
-router.post("/refresh", refresh);
+router.post("/refresh",authLimiter, refresh);
 
 /**
  * @swagger
@@ -173,7 +173,7 @@ router.post("/forgot-password",authLimiter, forgotPassword);
  *         description: Password updated successfully
  */
 
-router.post("/reset-password",resetPassword);
+router.post("/reset-password",authLimiter, resetPassword);
 
 router.get(
 	    "/admin",
@@ -205,6 +205,7 @@ router.get(
 
 router.get(
 	    "/profile",
+		authLimiter,
 	    authenticate,
 	    profile
 );

@@ -6,6 +6,8 @@ const authenticate = require("../middleware/authMiddleware");
 
 const authorize = require("../middleware/roleMiddleware");
 
+const authLimiter = require("../middleware/rateLimiter");
+
 const {
 
 	    getUsers,
@@ -18,6 +20,7 @@ const {
 
 } = require("../controllers/adminController");
 
+router.use(authLimiter);
 router.use(authenticate);
 
 router.use(authorize("admin"));
