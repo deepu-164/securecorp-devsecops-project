@@ -177,6 +177,7 @@ router.post("/reset-password",authLimiter, resetPassword);
 
 router.get(
 	    "/admin",
+		authLimiter,
 	    authenticate,
 	    authorize("admin"),
 	    (req, res) => {
